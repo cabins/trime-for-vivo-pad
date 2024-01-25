@@ -20,6 +20,8 @@ package com.osfans.trime.ime.core;
 
 import static android.graphics.Color.parseColor;
 
+import static splitties.systemservices.SystemServicesKt.getWindowManager;
+
 import android.app.AlarmManager;
 import android.app.Dialog;
 import android.app.PendingIntent;
@@ -37,6 +39,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -147,8 +150,18 @@ public class Trime extends LifecycleInputMethodService {
           mCandidateRoot.getLocationOnScreen(candidateLocation);
           final int minX = popupMarginH;
           final int minY = popupMargin;
-          final int maxX = mCandidateRoot.getWidth() - mPopupWindow.getWidth() - minX;
-          final int maxY = candidateLocation[1] - mPopupWindow.getHeight() - minY;
+          int maxX = mCandidateRoot.getWidth() - mPopupWindow.getWidth() - minX;
+          int maxY = candidateLocation[1] - mPopupWindow.getHeight() - minY;
+
+          // 这里由于一些未知的原因，maxX，maxY可能为负值，需要修正
+          // 测量屏幕的大小
+          DisplayMetrics displayMetrics = new DisplayMetrics();
+          getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+          int screenWidth = displayMetrics.widthPixels;
+          int screenHeight = displayMetrics.heightPixels;
+          maxX = maxX <= 0 ? (screenWidth - mPopupWindow.getWidth() - minX) : maxX;
+          maxY = maxY <= 0 ? (screenHeight - mPopupWindow.getHeight() - minY) : maxY;
+
           if (isWinFixed() || !isCursorUpdated) {
             // setCandidatesViewShown(true);
             switch (popupWindowPos) {
@@ -194,11 +207,19 @@ public class Trime extends LifecycleInputMethodService {
             switch (popupWindowPos) {
               case LEFT:
               case RIGHT:
+                // 这里需要修正一个点，如果靠近屏幕下边缘的时候，应该把候选窗口放到打字框的上面，避免遮挡
                 y = (int) mPopupRectF.bottom + popupMargin;
+                if (y > maxY) {
+                  y = (int) mPopupRectF.top - mPopupWindow.getHeight() - popupMargin;
+                }
                 break;
               case LEFT_UP:
               case RIGHT_UP:
+                // 这里需要修正一个点，如果靠近屏幕上边缘的时候，应该把候选窗口放到打字框的下面，避免遮挡
                 y = (int) mPopupRectF.top - mPopupWindow.getHeight() - popupMargin;
+                if (y < minY) {
+                  y = (int) mPopupRectF.bottom + popupMargin;
+                }
                 break;
               default:
                 Timber.wtf("UNREACHABLE BRANCH");
